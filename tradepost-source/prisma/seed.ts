@@ -73,7 +73,7 @@ async function main() {
     users.push(await db.user.upsert({
       where: { username: n },
       update: {},
-      create: { username: n, displayName: n, robloxUserId: `demo-${n.toLowerCase()}`, createdAt: new Date(Date.now() - (60 + i * 9) * 86400_000) },
+      create: { username: n, displayName: n, robloxUserId: `demo-${n.toLowerCase()}`, role: i === 0 ? "MOD" : "PLAYER", createdAt: new Date(Date.now() - (60 + i * 9) * 86400_000) },
     }));
   }
   const items = await db.item.findMany({ where: { gameId: game.id } });
@@ -119,7 +119,7 @@ async function main() {
     await db.post.create({
       data: {
         userId: pick(users).id, gameId: game.id, itemId: item.id, side, quantity: item.unit === "axe" ? 1 : Math.ceil(rand() * 20),
-        unitPrice: price, currencyId: currency.id, notes: pick(item.unit === "axe" ? axeNotes : woodNotes), expiresAt: new Date(Date.now() + (3 + rand() * 10) * day),
+        unitPrice: price, currencyId: currency.id, notes: pick(item.unit === "axe" ? axeNotes : woodNotes), expiresAt: new Date(Date.now() + (1 + rand() * 5) * day),
         createdAt: new Date(Date.now() - rand() * 2 * day),
       },
     });
@@ -128,16 +128,27 @@ async function main() {
   await db.post.create({
     data: {
       userId: users[1].id, gameId: game.id, itemId: phantom.id, side: "SELL", quantity: 25, unitPrice: 21500, currencyId: currency.id,
-      notes: "Weekend sale, delivered to your plot", isSpecial: true, specialUntil: new Date(Date.now() + 5 * day), expiresAt: new Date(Date.now() + 6 * day),
+      notes: "Weekend sale, delivered to your plot", isSpecial: true, expiresAt: new Date("2100-01-01T00:00:00Z"),
     },
   });
   const sinister = items.find((i) => i.name === "Sinister")!;
   await db.post.create({
     data: {
       userId: users[3].id, gameId: game.id, itemId: sinister.id, side: "BUY", quantity: 40, unitPrice: 14500, currencyId: currency.id,
-      notes: "Buying in bulk all week", isSpecial: true, specialUntil: new Date(Date.now() + 5 * day), expiresAt: new Date(Date.now() + 6 * day),
+      notes: "Buying in bulk all week", isSpecial: true, expiresAt: new Date("2100-01-01T00:00:00Z"),
     },
   });
+  const deals: [string, "BUY" | "SELL", number, number, string][] = [
+    ["Rukiryaxe", "SELL", 1, 115000, "Staff price, one only"],
+    ["Fire Axe", "SELL", 2, 14000, "Below market this week"],
+    ["Gold Swampy", "BUY", 30, 3600, "Staff buying, any amount"],
+  ];
+  for (const [name, side, quantity, unitPrice, notes] of deals) {
+    const item = items.find((i) => i.name === name)!;
+    await db.post.create({
+      data: { userId: users[0].id, gameId: game.id, itemId: item.id, side, quantity, unitPrice, currencyId: currency.id, notes, isSpecial: true, expiresAt: new Date("2100-01-01T00:00:00Z") },
+    });
+  }
 }
 
 main().finally(() => db.$disconnect());

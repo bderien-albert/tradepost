@@ -6,19 +6,21 @@ import { requireUser } from "@/lib/session";
 import { ago, money } from "@/lib/format";
 import { cancelTrade, confirmTrade, disputeTrade, rateTrade, sendMessage } from "@/app/actions";
 import { ActionForm, SubmitButton } from "@/components/forms";
+import { WEEK_MS, maybeCleanup } from "@/lib/cleanup";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Trade room" };
 
 export default async function TradePage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
+  await maybeCleanup();
   const { id } = await params;
   const trade = await db.trade.findUnique({
     where: { id },
     include: {
       buyer: true, seller: true, currency: true,
       item: { include: { game: true } },
-      messages: { include: { user: { select: { username: true } } }, orderBy: { createdAt: "asc" } },
+      messages: { where: { createdAt: { gte: new Date(Date.now() - WEEK_MS) } }, include: { user: { select: { username: true } } }, orderBy: { createdAt: "asc" } },
       ratings: true,
     },
   });
@@ -78,6 +80,10 @@ export default async function TradePage({ params }: { params: Promise<{ id: stri
               <li>Meet in {trade.item.game.name}. {isSeller ? "Hand over the items" : "Check the items"} before {isBuyer ? "you pay" : "they pay"}.</li>
               <li>Once it&apos;s done in-game, press Confirm. When you both confirm, it&apos;s recorded.</li>
             </ol>
+            <p className="mt-3 text-xs text-ink-3">
+              Closes automatically on {new Date(trade.createdAt.getTime() + WEEK_MS).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}:
+              finalized if either of you confirmed, cancelled if neither did.
+            </p>
             <div className="mt-5 flex flex-wrap gap-2 items-center">
               {myConfirm ? (
                 <span className="text-sm text-buy">You confirmed. Waiting for {other.username}.</span>
@@ -127,7 +133,7 @@ export default async function TradePage({ params }: { params: Promise<{ id: stri
       <aside className="border border-rule-strong rounded-sm flex flex-col h-[560px] bg-card">
         <div className="px-4 py-3 border-b border-rule flex items-baseline justify-between">
           <p className="font-medium text-sm">Chat</p>
-          <p className="text-xs text-ink-3">Kept with the trade record</p>
+          <p className="text-xs text-ink-3">Messages delete after 7 days</p>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 flex flex-col-reverse">
           <div className="space-y-3">

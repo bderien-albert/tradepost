@@ -10,7 +10,8 @@ type Game = {
   items: { id: string; slug: string; name: string; category: string; unit: string }[];
 };
 
-export function NewPostForm({ games, initial }: { games: Game[]; initial: { game?: string; item?: string; side: "BUY" | "SELL" } }) {
+export function NewPostForm({ games, initial, isStaff }: { games: Game[]; isStaff: boolean; initial: { game?: string; item?: string; side: "BUY" | "SELL"; adminDeal?: boolean } }) {
+  const [adminDeal, setAdminDeal] = useState(isStaff && !!initial.adminDeal);
   const [gameSlug, setGameSlug] = useState(initial.game && games.some((g) => g.slug === initial.game) ? initial.game : games[0]?.slug);
   const game = games.find((g) => g.slug === gameSlug);
   const [side, setSide] = useState<"BUY" | "SELL">(initial.side);
@@ -81,16 +82,28 @@ export function NewPostForm({ games, initial }: { games: Game[]; initial: { game
         <p className="text-xs text-ink-3 mt-1">No links, Discord tags, Robux or real-money prices. They&apos;ll be blocked.</p>
       </div>
 
+      {isStaff && (
+        <label className="flex items-start gap-3 border border-special-rule bg-special rounded-sm p-3 cursor-pointer">
+          <input type="checkbox" name="adminDeal" checked={adminDeal} onChange={(e) => setAdminDeal(e.target.checked)} className="mt-1" />
+          <span>
+            <span className="block text-sm font-medium">Post as an admin deal</span>
+            <span className="block text-xs text-ink-2">Pinned at the top of the board and listed on the Admin deals page. Doesn&apos;t expire.</span>
+          </span>
+        </label>
+      )}
+
       <div className="flex flex-wrap items-end justify-between gap-4 pt-2 border-t border-rule">
         <div>
           <label className="label" htmlFor="days">Keep it up for</label>
-          <select id="days" name="days" className="field w-36" defaultValue="7">
-            <option value="1">1 day</option>
-            <option value="3">3 days</option>
-            <option value="7">7 days</option>
-            <option value="14">14 days</option>
-            <option value="30">30 days</option>
-          </select>
+          {adminDeal ? (
+            <p className="text-sm text-special-ink h-[2.4rem] flex items-center">Until staff remove it</p>
+          ) : (
+            <select id="days" name="days" className="field w-36" defaultValue="7">
+              <option value="1">1 day</option>
+              <option value="3">3 days</option>
+              <option value="7">7 days (max)</option>
+            </select>
+          )}
         </div>
         <div className="text-right">
           <p className="text-xs text-ink-3">Total</p>

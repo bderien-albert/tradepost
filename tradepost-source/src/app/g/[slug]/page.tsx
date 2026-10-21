@@ -2,10 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
-import { boardPosts, openWhere, reputation, type SortKey } from "@/lib/queries";
+import { activeSpecialWhere, boardPosts, openWhere, reputation, type SortKey } from "@/lib/queries";
 import { PostTable } from "@/components/post-table";
 import { TradeList, tradeInclude } from "@/components/trade-list";
 import { compact } from "@/lib/format";
+import { maybeCleanup } from "@/lib/cleanup";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ const VIEWS = [
 ] as const;
 
 export default async function GamePage({ params, searchParams }: Props) {
+  await maybeCleanup();
   const { slug } = await params;
   const sp = await searchParams;
   const game = await db.game.findUnique({
@@ -73,6 +75,8 @@ export default async function GamePage({ params, searchParams }: Props) {
       )}
       {view === "items" && <Items gameId={game.id} slug={slug} items={game.items} symbol={game.currencies[0]?.symbol ?? ""} />}
       {view === "trades" && <Trades gameId={game.id} />}
+
+      <AdminDealsLink gameId={game.id} slug={slug} />
     </div>
   );
 }
@@ -176,4 +180,21 @@ async function Trades({ gameId }: { gameId: string }) {
     take: 50,
   });
   return <TradeList trades={trades} />;
+}
+
+async function AdminDealsLink({ gameId, slug }: { gameId: string; slug: string }) {
+  const n = await db.post.count({ where: { gameId, ...activeSpecialWhere() } });
+  return (
+    <Link
+      href={`/g/${slug}/deals`}
+      className="mt-10 flex items-center justify-between gap-4 border border-special-rule bg-special rounded-sm px-5 py-4 hover:border-special-ink transition-colors"
+    >
+      <span>
+        <span className="eyebrow !text-special-ink">Admin</span>
+        <span className="block font-medium mt-0.5">Admin deals</span>
+        <span className="block text-sm text-ink-2">Every staff deal for this game, sorted by item type.</span>
+      </span>
+      <span className="text-sm text-special-ink whitespace-nowrap"><span className="num">{n}</span> live →</span>
+    </Link>
+  );
 }

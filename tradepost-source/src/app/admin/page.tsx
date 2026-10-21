@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Admin" };
 
 const TABS = [
-  { key: "specials", label: "Admin specials" },
+  { key: "specials", label: "Admin deals" },
   { key: "reports", label: "Reports" },
   { key: "users", label: "Users" },
   { key: "catalog", label: "Games & items" },
@@ -55,8 +55,8 @@ async function Specials({ q }: { q?: string }) {
   return (
     <div className="space-y-10">
       <p className="text-sm text-ink-2 max-w-2xl">
-        Admin specials sit above normal results on the game board and home page, with an &quot;Admin special&quot; label, the way sponsored results sit at the top of a search page.
-        Up to 3 show per board.
+        Admin deals sit above normal results on the game board and home page (up to 3 per board), like sponsored search results,
+        and every one is listed on the game&apos;s Admin deals page, sorted by item type. Pinned &quot;until removed&quot;, they never expire.
       </p>
       <section>
         <h2 className="eyebrow mb-3">Pinned now ({active.length})</h2>
@@ -74,7 +74,7 @@ async function Specials({ q }: { q?: string }) {
         <PostRows posts={candidates} action={(id) => (
           <form action={setSpecial} className="flex gap-1.5">
             <input type="hidden" name="postId" value={id} />
-            <select name="days" defaultValue="7" className="field h-[1.85rem] w-24 text-xs"><option value="1">1 day</option><option value="3">3 days</option><option value="7">7 days</option><option value="30">30 days</option></select>
+            <select name="days" defaultValue="-1" className="field h-[1.85rem] w-32 text-xs"><option value="-1">Until removed</option><option value="1">1 day</option><option value="3">3 days</option><option value="7">7 days</option><option value="30">30 days</option></select>
             <SubmitButton className="btn btn-sm">Pin</SubmitButton>
           </form>
         )} />
@@ -94,7 +94,7 @@ function PostRows({ posts, action }: { posts: Awaited<ReturnType<typeof db.post.
             <td className="text-sm text-ink-2">{p.game.name}</td>
             <td className="r num">{money(p.unitPrice, p.currency.symbol)}</td>
             <td className="text-sm">{p.user.username}</td>
-            <td className="text-xs text-ink-3">{p.isSpecial && p.specialUntil ? p.specialUntil.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : `expires ${p.expiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}</td>
+            <td className="text-xs text-ink-3">{p.isSpecial ? (p.specialUntil ? p.specialUntil.toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "Until removed") : `expires ${p.expiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}</td>
             <td className="r">{action(p.id)}</td>
           </tr>
         ))}

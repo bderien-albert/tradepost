@@ -3,10 +3,12 @@ import { db } from "@/lib/db";
 import { activeSpecialWhere, openWhere, postInclude, reputation } from "@/lib/queries";
 import { PostTable } from "@/components/post-table";
 import { TradeList, tradeInclude } from "@/components/trade-list";
+import { maybeCleanup } from "@/lib/cleanup";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  await maybeCleanup();
   const weekAgo = new Date(Date.now() - 7 * 86400_000);
   const [games, specials, latest, recent, openCount, weekCount] = await Promise.all([
     db.game.findMany({

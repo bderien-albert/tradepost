@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/session";
 import { postInclude, reputation } from "@/lib/queries";
 import { PostTable } from "@/components/post-table";
 import { ago, money } from "@/lib/format";
+import { WEEK_MS } from "@/lib/cleanup";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "My trades" };
@@ -22,6 +23,16 @@ export default async function Me() {
     db.post.findMany({ where: { userId: user.id, status: { not: "OPEN" } }, include: postInclude, orderBy: { createdAt: "desc" }, take: 20 }),
   ]);
   const rep = await reputation([user.id]);
+  const chatRows = await db.postMessage.findMany({
+    where: { createdAt: { gte: new Date(Date.now() - WEEK_MS) }, OR: [{ participantId: user.id }, { post: { userId: user.id } }] },
+    include: { post: { include: { item: true, user: { select: { username: true } } } }, participant: { select: { username: true } }, sender: { select: { username: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  const chats = new Map<string, (typeof chatRows)[number]>();
+  for (const m of chatRows) {
+    const key = `${m.postId}:${m.participantId}`;
+    if (!chats.has(key)) chats.set(key, m);
+  }
 
   return (
     <div className="space-y-10">
@@ -53,6 +64,27 @@ export default async function Me() {
                 <Link href={`/post/${o.postId}`} className="btn btn-ghost btn-sm">Review</Link>
               </li>
             ))}
+          </ul>
+        )}
+      </Section>
+
+      <Section title={`Chats (${chats.size})`}>
+        {chats.size === 0 ? <Empty>No chats this week. Messages delete after 7 days.</Empty> : (
+          <ul className="divide-y divide-rule border-y border-rule text-sm">
+            {[...chats.values()].map((m) => {
+              const mineIsOwner = m.post.userId === user.id;
+              const other = mineIsOwner ? m.participant.username : m.post.user.username;
+              const waiting = m.senderId !== user.id;
+              return (
+                <li key={m.id} className="py-2.5 flex flex-wrap items-center gap-3">
+                  <span className={`eyebrow w-24 ${waiting ? "!text-sell" : ""}`}>{waiting ? "Reply" : "Sent"}</span>
+                  <Link href={`/post/${m.postId}${mineIsOwner ? `?chat=${m.participantId}` : ""}#chat`} className="flex-1 min-w-0 hover:underline underline-offset-4">
+                    <span className="font-medium">{other}</span> about {m.post.item.name}: <span className="text-ink-2">{m.body.length > 60 ? m.body.slice(0, 60) + "…" : m.body}</span>
+                  </Link>
+                  <span className="text-xs text-ink-3">{ago(m.createdAt)}</span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Section>

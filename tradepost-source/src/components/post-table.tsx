@@ -53,8 +53,8 @@ function Row({ p, rep, special, showGame, showSide }: { p: PostRow; rep: Rep; sp
         <div className="flex items-center gap-2.5">
           {showSide && <span className={`side-tag side-${p.side}`}>{p.side === "BUY" ? "Buying" : "Selling"}</span>}
           <Link href={`/post/${p.id}`} className="font-medium hover:underline underline-offset-4">{p.item.name}</Link>
-          {special && (
-            <span className="eyebrow !text-special-ink !text-[0.62rem] border border-special-rule rounded-[2px] px-1.5 py-px">Admin special</span>
+          {(special || p.isSpecial) && (
+            <span className="eyebrow !text-special-ink !text-[0.62rem] border border-special-rule rounded-[2px] px-1.5 py-px">Admin deal</span>
           )}
         </div>
         <div className="text-xs text-ink-3 mt-0.5">

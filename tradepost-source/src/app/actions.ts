@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { checkText } from "@/lib/filter";
 import { audit } from "@/lib/audit";
+import { NO_EXPIRY, WEEK_MS } from "@/lib/cleanup";
 import { currentUser, demoLoginEnabled, endSession, requireStaff, requireUser, startSession } from "@/lib/session";
 
 export type FormState = { error?: string; ok?: string } | undefined;
@@ -44,7 +45,7 @@ const postSchema = z.object({
   unitPrice: z.coerce.number().int().min(1).max(1_000_000_000),
   currencyId: z.string().min(1),
   notes: z.string().max(280).optional(),
-  days: z.coerce.number().int().min(1).max(30),
+  days: z.coerce.number().int().min(1).max(7),
 });
 
 export async function createPost(_: FormState, form: FormData): Promise<FormState> {
@@ -77,8 +78,10 @@ export async function createPost(_: FormState, form: FormData): Promise<FormStat
     if (today >= NEW_ACCOUNT_DAILY_POSTS) return { error: `New accounts can post ${NEW_ACCOUNT_DAILY_POSTS} times a day for their first week.` };
   }
 
+  const adminDeal = user.role !== "PLAYER" && form.get("adminDeal") === "on";
   const post = await db.post.create({
     data: {
+      isSpecial: adminDeal,
       userId: user.id,
       gameId: item.gameId,
       itemId: item.id,
@@ -87,9 +90,10 @@ export async function createPost(_: FormState, form: FormData): Promise<FormStat
       unitPrice: d.unitPrice,
       currencyId: currency.id,
       notes: d.notes,
-      expiresAt: new Date(Date.now() + d.days * 86400_000),
+      expiresAt: adminDeal ? NO_EXPIRY : new Date(Date.now() + d.days * 86400_000),
     },
   });
+  if (adminDeal) await audit(user.id, "special.create", `post:${post.id}`);
   redirect(`/post/${post.id}`);
 }
 
@@ -270,6 +274,29 @@ export async function rateTrade(_: FormState, form: FormData): Promise<FormState
   return { ok: "Thanks, rating saved." };
 }
 
+// ---------- post chat ----------
+
+export async function sendPostMessage(_: FormState, form: FormData): Promise<FormState> {
+  const user = await requireUser();
+  const postId = String(form.get("postId"));
+  const body = String(form.get("body") ?? "").trim();
+  const post = await db.post.findUnique({ where: { id: postId } });
+  if (!post || post.status === "REMOVED") return { error: "This post is gone." };
+  // The thread belongs to the non-owner; owners reply into a chosen thread.
+  const participantId = user.id === post.userId ? String(form.get("participantId") ?? "") : user.id;
+  if (!participantId || participantId === post.userId) return { error: "Pick a conversation first." };
+  if (!body || body.length > 500) return { error: "Messages are 1 to 500 characters." };
+  const bad = checkText(body);
+  if (bad) return { error: bad };
+  if (user.id === post.userId) {
+    const started = await db.postMessage.count({ where: { postId, participantId } });
+    if (!started) return { error: "Wait for them to message you first." };
+  }
+  await db.postMessage.create({ data: { postId, participantId, senderId: user.id, body } });
+  revalidatePath(`/post/${postId}`);
+  return {};
+}
+
 // ---------- reports ----------
 
 export async function report(_: FormState, form: FormData): Promise<FormState> {
@@ -286,16 +313,23 @@ export async function report(_: FormState, form: FormData): Promise<FormState> {
 
 // ---------- staff ----------
 
+// days > 0 pins for that many days, -1 pins until unpinned, 0 unpins.
 export async function setSpecial(form: FormData) {
   const staff = await requireStaff();
   const postId = String(form.get("postId"));
   const days = Number(form.get("days") ?? 0);
-  const on = days > 0;
-  await db.post.update({
-    where: { id: postId },
-    data: { isSpecial: on, specialUntil: on ? new Date(Date.now() + days * 86400_000) : null },
-  });
-  await audit(staff.id, on ? "special.on" : "special.off", `post:${postId}`, on ? { days } : undefined);
+  const post = await db.post.findUnique({ where: { id: postId } });
+  if (!post) return;
+  const now = Date.now();
+  if (days === 0) {
+    // Back to a normal post: at most a week left.
+    const expiresAt = new Date(Math.min(post.expiresAt.getTime(), now + WEEK_MS));
+    await db.post.update({ where: { id: postId }, data: { isSpecial: false, specialUntil: null, expiresAt } });
+  } else {
+    const specialUntil = days > 0 ? new Date(now + days * 86400_000) : null;
+    await db.post.update({ where: { id: postId }, data: { isSpecial: true, specialUntil, expiresAt: NO_EXPIRY } });
+  }
+  await audit(staff.id, days === 0 ? "special.off" : "special.on", `post:${postId}`, days ? { days } : undefined);
   revalidatePath("/", "layout");
 }
 

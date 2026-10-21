@@ -9,10 +9,12 @@ import { acceptOffer, cancelPost, declineOffer, makeOffer, removePost, setSpecia
 import { ActionForm, SubmitButton } from "@/components/forms";
 import { Trader } from "@/components/trader";
 import { ReportForm } from "@/components/report-form";
+import { PostChat } from "@/components/post-chat";
+import { maybeCleanup } from "@/lib/cleanup";
 
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ id: string }> };
+type Props = { params: Promise<{ id: string }>; searchParams?: Promise<{ chat?: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const p = await db.post.findUnique({ where: { id: (await params).id }, include: { item: true } });
@@ -21,8 +23,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 const STATUS_LABEL = { OPEN: "Open", FILLED: "Filled", CANCELLED: "Cancelled", EXPIRED: "Expired", REMOVED: "Removed by a moderator" } as const;
 
-export default async function PostPage({ params }: Props) {
+export default async function PostPage({ params, searchParams }: Props) {
+  await maybeCleanup();
   const { id } = await params;
+  const chatWith = (await searchParams)?.chat;
   const [user, post] = await Promise.all([
     currentUser(),
     db.post.findUnique({
@@ -57,8 +61,11 @@ export default async function PostPage({ params }: Props) {
         </p>
         <div className="flex flex-wrap items-center gap-3 mt-2">
           <span className={`side-tag side-${post.side}`}>{verb}</span>
-          {specialActive && <span className="eyebrow !text-special-ink border border-special-rule bg-special rounded-[2px] px-1.5 py-px">Admin special</span>}
-          <span className="text-xs text-ink-3">{status} · posted {ago(post.createdAt)}</span>
+          {specialActive && <span className="eyebrow !text-special-ink border border-special-rule bg-special rounded-[2px] px-1.5 py-px">Admin deal</span>}
+          <span className="text-xs text-ink-3">
+            {status} · posted {ago(post.createdAt)}
+            {isOpen && (specialActive ? " · no expiry" : ` · closes ${post.expiresAt.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}`)}
+          </span>
         </div>
         <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mt-3">
           <span className="num">{left.toLocaleString("en-US")}</span> × {post.item.name}
@@ -75,6 +82,8 @@ export default async function PostPage({ params }: Props) {
           </p>
         )}
         {post.notes && <blockquote className="mt-5 border-l-2 border-rule-strong pl-4 text-ink-2 leading-relaxed whitespace-pre-line">{post.notes}</blockquote>}
+
+        <PostChat postId={post.id} ownerId={post.userId} ownerName={post.user.username} viewer={user} selected={chatWith} open={isOpen} />
 
         <section className="mt-10">
           <h2 className="eyebrow mb-3">{isOwner || isStaff ? `Offers (${post.offers.length})` : "Your offers"}</h2>
@@ -156,9 +165,10 @@ export default async function PostPage({ params }: Props) {
             <form action={setSpecial} className="flex gap-2 items-end">
               <input type="hidden" name="postId" value={post.id} />
               <div className="flex-1">
-                <label className="label" htmlFor="sp-days">Admin special for</label>
-                <select id="sp-days" name="days" className="field" defaultValue={specialActive ? "0" : "7"}>
+                <label className="label" htmlFor="sp-days">Admin deal for</label>
+                <select id="sp-days" name="days" className="field" defaultValue={specialActive ? "0" : "-1"}>
                   <option value="0">Off</option>
+                  <option value="-1">Until removed</option>
                   <option value="1">1 day</option>
                   <option value="3">3 days</option>
                   <option value="7">7 days</option>
@@ -167,6 +177,7 @@ export default async function PostPage({ params }: Props) {
               </div>
               <SubmitButton className="btn btn-sm h-[2.4rem]">Save</SubmitButton>
             </form>
+            {specialActive && !post.specialUntil && <p className="text-xs text-special-ink">Pinned until staff remove it</p>}
             {specialActive && post.specialUntil && <p className="text-xs text-special-ink">Pinned until {post.specialUntil.toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>}
             {post.status !== "REMOVED" && (
               <form action={removePost}>

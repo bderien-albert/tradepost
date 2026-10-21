@@ -63,6 +63,8 @@ model User {
 
   posts          Post[]
   offers         Offer[]
+  postMessages   PostMessage[] @relation("sender")
+  postThreads    PostMessage[] @relation("participant")
   buyTrades      Trade[]   @relation("buyer")
   sellTrades     Trade[]   @relation("seller")
   messages       Message[]
@@ -140,6 +142,7 @@ model Post {
   currency     Currency   @relation(fields: [currencyId], references: [id])
   offers       Offer[]
   trades       Trade[]
+  messages     PostMessage[]
 
   @@index([gameId, side, status])
   @@index([itemId, status])
@@ -237,4 +240,21 @@ model AuditLog {
   detail    Json?
   createdAt DateTime @default(now())
   actor     User?    @relation(fields: [actorId], references: [id])
+}
+
+// Chat between a post's owner and one interested player, before any offer.
+// Messages are deleted after 7 days (see src/lib/cleanup.ts).
+model PostMessage {
+  id            String   @id @default(cuid())
+  postId        String
+  participantId String
+  senderId      String
+  body          String
+  createdAt     DateTime @default(now())
+  post          Post     @relation(fields: [postId], references: [id])
+  participant   User     @relation("participant", fields: [participantId], references: [id])
+  sender        User     @relation("sender", fields: [senderId], references: [id])
+
+  @@index([postId, participantId, createdAt])
+  @@index([createdAt])
 }

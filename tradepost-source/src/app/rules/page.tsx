@@ -30,10 +30,18 @@ export default function Rules() {
         <li>If something goes wrong, open a dispute from the trade room. Moderators see the chat.</li>
       </ol>
 
-      <h2 className="font-medium text-lg mt-10">Admin specials</h2>
+      <h2 className="font-medium text-lg mt-10">Time limits</h2>
+      <ul className="mt-3 space-y-2 text-ink-2 list-disc pl-5">
+        <li>Posts close after at most 7 days. Post again if you still want to trade.</li>
+        <li>Chat messages are deleted 7 days after they&apos;re sent.</li>
+        <li>A trade still open after 7 days is closed: finalized if either player confirmed it, cancelled if neither did.</li>
+        <li>Completed trades, ratings and prices are kept for good.</li>
+      </ul>
+
+      <h2 className="font-medium text-lg mt-10">Admin deals</h2>
       <p className="mt-3 text-ink-2 leading-relaxed">
-        Rows marked <span className="eyebrow !text-special-ink border border-special-rule bg-special rounded-[2px] px-1.5 py-px">Admin special</span> are
-        picked by the site team and pinned above normal results. They follow the same rules as every other post.
+        Rows marked <span className="eyebrow !text-special-ink border border-special-rule bg-special rounded-[2px] px-1.5 py-px">Admin deal</span> are
+        picked or posted by the site team. They&apos;re pinned above normal results, listed on each game&apos;s Admin deals page, and stay up until staff remove them. Otherwise they follow the same rules as every other post.
       </p>
 
       <h2 className="font-medium text-lg mt-10">Age</h2>

@@ -51,6 +51,10 @@ Buy one from Cloudflare, Namecheap or Porkbun, then in Vercel open **Settings â†
 - Neon's free database pauses when idle and wakes in about a second on the next visit. It never deletes data.
 - To back up, use Neon's dashboard (branches / restore) or run `pg_dump` against `DATABASE_URL_UNPOOLED`.
 
+## Automatic clean-up
+
+`vercel.json` runs `/api/cron/cleanup` once a day (free on Hobby). It closes posts older than a week, finalizes or cancels week-old trades, and deletes chat messages older than 7 days. Admin deals never expire. Optionally add a `CRON_SECRET` environment variable so only Vercel can trigger it. The site also runs the same clean-up on its own as people browse.
+
 ## Updating the site
 
 Every push to the GitHub repo redeploys automatically.
