@@ -1,0 +1,260 @@
+// Nothing here is ever hard-deleted: rows move through statuses so the full
+// history of posts, offers and trades stays queryable.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL_UNPOOLED")
+}
+
+enum Role {
+  PLAYER
+  MOD
+  ADMIN
+}
+
+enum Side {
+  BUY
+  SELL
+}
+
+enum PostStatus {
+  OPEN
+  FILLED
+  CANCELLED
+  EXPIRED
+  REMOVED
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  WITHDRAWN
+}
+
+enum TradeStatus {
+  ACTIVE
+  COMPLETED
+  DISPUTED
+  CANCELLED
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+model User {
+  id             String    @id @default(cuid())
+  robloxUserId   String    @unique
+  username       String    @unique
+  displayName    String
+  avatarUrl      String?
+  role           Role      @default(PLAYER)
+  createdAt      DateTime  @default(now())
+  bannedAt       DateTime?
+  banReason      String?
+
+  posts          Post[]
+  offers         Offer[]
+  postMessages   PostMessage[] @relation("sender")
+  postThreads    PostMessage[] @relation("participant")
+  buyTrades      Trade[]   @relation("buyer")
+  sellTrades     Trade[]   @relation("seller")
+  messages       Message[]
+  ratingsGiven   Rating[]  @relation("rater")
+  ratingsGot     Rating[]  @relation("rated")
+  reports        Report[]  @relation("reporter")
+  auditEntries   AuditLog[]
+}
+
+model Game {
+  id            String     @id @default(cuid())
+  name          String
+  slug          String     @unique
+  robloxPlaceId String?
+  blurb         String?
+  active        Boolean    @default(true)
+  sortOrder     Int        @default(0)
+  createdAt     DateTime   @default(now())
+
+  currencies    Currency[]
+  items         Item[]
+  posts         Post[]
+}
+
+model Currency {
+  id      String @id @default(cuid())
+  gameId  String
+  name    String
+  symbol  String
+  game    Game   @relation(fields: [gameId], references: [id])
+  posts   Post[]
+  trades  Trade[]
+
+  @@unique([gameId, name])
+}
+
+model Item {
+  id        String   @id @default(cuid())
+  gameId    String
+  name      String
+  slug      String
+  category  String
+  rarity    String?
+  unit      String   @default("unit")
+  createdAt DateTime @default(now())
+  game      Game     @relation(fields: [gameId], references: [id])
+  posts     Post[]
+  trades    Trade[]
+
+  @@unique([gameId, slug])
+}
+
+model Post {
+  id           String     @id @default(cuid())
+  userId       String
+  gameId       String
+  itemId       String
+  side         Side
+  quantity     Int
+  filled       Int        @default(0)
+  unitPrice    Int
+  currencyId   String
+  notes        String?
+  status       PostStatus @default(OPEN)
+  // Admin specials are pinned above normal results, like sponsored search ads.
+  isSpecial    Boolean    @default(false)
+  specialUntil DateTime?
+  expiresAt    DateTime
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  user         User       @relation(fields: [userId], references: [id])
+  game         Game       @relation(fields: [gameId], references: [id])
+  item         Item       @relation(fields: [itemId], references: [id])
+  currency     Currency   @relation(fields: [currencyId], references: [id])
+  offers       Offer[]
+  trades       Trade[]
+  messages     PostMessage[]
+
+  @@index([gameId, side, status])
+  @@index([itemId, status])
+}
+
+model Offer {
+  id         String      @id @default(cuid())
+  postId     String
+  userId     String
+  quantity   Int
+  unitPrice  Int
+  message    String?
+  status     OfferStatus @default(PENDING)
+  createdAt  DateTime    @default(now())
+  decidedAt  DateTime?
+
+  post       Post        @relation(fields: [postId], references: [id])
+  user       User        @relation(fields: [userId], references: [id])
+  trade      Trade?
+}
+
+model Trade {
+  id                String      @id @default(cuid())
+  postId            String
+  offerId           String?     @unique
+  buyerId           String
+  sellerId          String
+  itemId            String
+  quantity          Int
+  // Terms are copied from the post/offer so history never shifts afterwards.
+  unitPrice         Int
+  currencyId        String
+  status            TradeStatus @default(ACTIVE)
+  buyerConfirmedAt  DateTime?
+  sellerConfirmedAt DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime    @default(now())
+
+  post              Post        @relation(fields: [postId], references: [id])
+  offer             Offer?      @relation(fields: [offerId], references: [id])
+  buyer             User        @relation("buyer", fields: [buyerId], references: [id])
+  seller            User        @relation("seller", fields: [sellerId], references: [id])
+  item              Item        @relation(fields: [itemId], references: [id])
+  currency          Currency    @relation(fields: [currencyId], references: [id])
+  messages          Message[]
+  ratings           Rating[]
+
+  @@index([itemId, status, completedAt])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  tradeId   String
+  userId    String
+  body      String
+  createdAt DateTime @default(now())
+  trade     Trade    @relation(fields: [tradeId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Rating {
+  id        String   @id @default(cuid())
+  tradeId   String
+  fromId    String
+  toId      String
+  stars     Int
+  comment   String?
+  createdAt DateTime @default(now())
+  trade     Trade    @relation(fields: [tradeId], references: [id])
+  from      User     @relation("rater", fields: [fromId], references: [id])
+  to        User     @relation("rated", fields: [toId], references: [id])
+
+  @@unique([tradeId, fromId])
+}
+
+model Report {
+  id          String       @id @default(cuid())
+  reporterId  String
+  targetType  String
+  targetId    String
+  reason      String
+  status      ReportStatus @default(OPEN)
+  resolution  String?
+  resolvedBy  String?
+  createdAt   DateTime     @default(now())
+  resolvedAt  DateTime?
+  reporter    User         @relation("reporter", fields: [reporterId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  target    String
+  detail    Json?
+  createdAt DateTime @default(now())
+  actor     User?    @relation(fields: [actorId], references: [id])
+}
+
+// Chat between a post's owner and one interested player, before any offer.
+// Messages are deleted after 7 days (see src/lib/cleanup.ts).
+model PostMessage {
+  id            String   @id @default(cuid())
+  postId        String
+  participantId String
+  senderId      String
+  body          String
+  createdAt     DateTime @default(now())
+  post          Post     @relation(fields: [postId], references: [id])
+  participant   User     @relation("participant", fields: [participantId], references: [id])
+  sender        User     @relation("sender", fields: [senderId], references: [id])
+
+  @@index([postId, participantId, createdAt])
+  @@index([createdAt])
+}
