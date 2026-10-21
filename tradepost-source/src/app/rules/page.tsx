@@ -6,7 +6,7 @@ export default function Rules() {
   return (
     <article className="max-w-2xl">
       <p className="eyebrow">Read before trading</p>
-      <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">Rules &amp; safety</h1>
+      <h1 className="font-display text-3xl sm:text-4xl font-extrabold tracking-tight mt-1">Rules &amp; safety</h1>
       <p className="mt-4 text-ink-2 leading-relaxed">
         Tradepost only connects players who want to swap items for in-game currency, or items for items. The trade itself always happens inside the game.
       </p>
@@ -40,7 +40,7 @@ export default function Rules() {
 
       <h2 className="font-medium text-lg mt-10">Admin deals</h2>
       <p className="mt-3 text-ink-2 leading-relaxed">
-        Rows marked <span className="eyebrow !text-special-ink border border-special-rule bg-special rounded-[2px] px-1.5 py-px">Admin deal</span> are
+        Rows marked <span className="deal-tag">★ Admin deal</span> are
         picked or posted by the site team. They&apos;re pinned above normal results, listed on each game&apos;s Admin deals page, and stay up until staff remove them. Otherwise they follow the same rules as every other post.
       </p>
 

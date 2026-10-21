@@ -51,7 +51,7 @@ export async function PostChat({ postId, ownerId, ownerName, viewer, selected, o
       <div className="flex gap-1.5 overflow-x-auto px-4 pt-3">
         {[...threads.entries()].map(([id, t]) => (
           <Link key={id} href={`/post/${postId}?chat=${id}#chat`} scroll={false}
-            className={`text-sm px-2.5 py-1 border rounded-sm whitespace-nowrap ${id === current ? "border-ink bg-paper" : "border-rule text-ink-2 hover:border-rule-strong"}`}>
+            className={`chip h-8 ${id === current ? "chip-on" : ""}`}>
             {t.username} <span className="text-xs text-ink-3">{ago(t.last)}</span>
           </Link>
         ))}
@@ -64,9 +64,9 @@ export async function PostChat({ postId, ownerId, ownerName, viewer, selected, o
 
 function Shell({ title = "Chat", children }: { title?: string; children: React.ReactNode }) {
   return (
-    <section id="chat" className="mt-10 border border-rule-strong rounded-sm bg-card">
+    <section id="chat" className="mt-10 lg:mt-0 panel overflow-hidden scroll-mt-28">
       <div className="px-4 py-3 border-b border-rule flex items-baseline justify-between gap-3">
-        <p className="font-medium text-sm">{title}</p>
+        <p className="font-display font-extrabold text-lg">{title}</p>
         <p className="text-xs text-ink-3">Messages delete after 7 days</p>
       </div>
       {children}
@@ -85,7 +85,7 @@ function Messages({ messages, viewerId, empty }: {
         return (
           <div key={m.id} className={`max-w-[85%] ${mine ? "ml-auto text-right" : ""}`}>
             <p className="text-[0.7rem] text-ink-3">{m.sender.username} · {ago(m.createdAt)}</p>
-            <p className={`inline-block text-sm px-3 py-1.5 rounded-sm mt-0.5 text-left ${mine ? "bg-ink text-paper" : "bg-paper border border-rule"}`}>{m.body}</p>
+            <p className={`inline-block text-sm px-3 py-1.5 rounded-2xl mt-0.5 text-left ${mine ? "bg-brand text-white" : "bg-paper-2"}`}>{m.body}</p>
           </div>
         );
       })}

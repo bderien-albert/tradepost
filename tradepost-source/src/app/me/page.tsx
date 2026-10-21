@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/session";
 import { postInclude, reputation } from "@/lib/queries";
 import { PostTable } from "@/components/post-table";
+import { PostGrid } from "@/components/post-card";
 import { ago, money } from "@/lib/format";
 import { WEEK_MS } from "@/lib/cleanup";
 
@@ -37,7 +38,7 @@ export default async function Me() {
   return (
     <div className="space-y-10">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="font-display text-3xl font-semibold tracking-tight">My trades</h1>
+        <h1 className="font-display text-3xl sm:text-4xl font-extrabold tracking-tight">My trades</h1>
         <Link href="/post/new" className="btn">Post a trade</Link>
       </div>
 
@@ -45,7 +46,7 @@ export default async function Me() {
         {active.length + incoming.length === 0 ? (
           <Empty>Nothing waiting on you.</Empty>
         ) : (
-          <ul className="divide-y divide-rule border-y border-rule">
+          <ul className="panel divide-y divide-rule px-4">
             {active.map((t) => {
               const mine = t.buyerId === user.id ? t.buyerConfirmedAt : t.sellerConfirmedAt;
               const other = t.buyerId === user.id ? t.seller.username : t.buyer.username;
@@ -70,7 +71,7 @@ export default async function Me() {
 
       <Section title={`Chats (${chats.size})`}>
         {chats.size === 0 ? <Empty>No chats this week. Messages delete after 7 days.</Empty> : (
-          <ul className="divide-y divide-rule border-y border-rule text-sm">
+          <ul className="panel divide-y divide-rule px-4 text-sm">
             {[...chats.values()].map((m) => {
               const mineIsOwner = m.post.userId === user.id;
               const other = mineIsOwner ? m.participant.username : m.post.user.username;
@@ -90,12 +91,12 @@ export default async function Me() {
       </Section>
 
       <Section title="My open posts">
-        <PostTable posts={posts} rep={rep} showGame showSide empty="You have no open posts." />
+        <PostGrid posts={posts} rep={rep} savedIds={new Set()} showGame empty="You have no open posts." />
       </Section>
 
       <Section title="Offers I sent">
         {outgoing.length === 0 ? <Empty>No offers sent yet.</Empty> : (
-          <ul className="divide-y divide-rule border-y border-rule text-sm">
+          <ul className="panel divide-y divide-rule px-4 text-sm">
             {outgoing.map((o) => (
               <li key={o.id} className="py-2.5 flex flex-wrap items-center gap-3">
                 <span className="eyebrow w-24">{o.status.toLowerCase()}</span>
@@ -115,7 +116,7 @@ export default async function Me() {
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return <section><h2 className="eyebrow mb-3">{title}</h2>{children}</section>;
+  return <section><h2 className="font-display text-xl font-extrabold tracking-tight mb-3">{title}</h2>{children}</section>;
 }
 function Empty({ children }: { children: React.ReactNode }) {
   return <p className="text-sm text-ink-3">{children}</p>;

@@ -19,13 +19,13 @@ export function PriceChart({ points, symbol }: { points: { t: number; p: number 
       {ticks.map((v) => (
         <g key={v}>
           <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke="var(--rule)" strokeDasharray="2 3" />
-          <text x={L - 8} y={y(v) + 4} textAnchor="end" fontSize="10" fill="var(--ink-3)" fontFamily="var(--font-mono)">{compact(v, symbol)}</text>
+          <text x={L - 8} y={y(v) + 4} textAnchor="end" fontSize="10" fill="var(--ink-3)" fontFamily="var(--font-sans)">{compact(v, symbol)}</text>
         </g>
       ))}
-      <path d={d} fill="none" stroke="var(--ink)" strokeWidth="1.5" strokeLinejoin="round" />
-      {points.map((pt, i) => <circle key={i} cx={x(pt.t)} cy={y(pt.p)} r="2.5" fill="var(--paper)" stroke="var(--ink)" strokeWidth="1.25" />)}
-      <text x={L} y={H - 6} fontSize="10" fill="var(--ink-3)" fontFamily="var(--font-mono)">{shortDate(new Date(t0))}</text>
-      <text x={W - R} y={H - 6} textAnchor="end" fontSize="10" fill="var(--ink-3)" fontFamily="var(--font-mono)">{shortDate(new Date(t1))}</text>
+      <path d={d} fill="none" stroke="var(--brand)" strokeWidth="2.5" strokeLinejoin="round" />
+      {points.map((pt, i) => <circle key={i} cx={x(pt.t)} cy={y(pt.p)} r="3.5" fill="var(--card)" stroke="var(--brand)" strokeWidth="2" />)}
+      <text x={L} y={H - 6} fontSize="10" fill="var(--ink-3)" fontFamily="var(--font-sans)">{shortDate(new Date(t0))}</text>
+      <text x={W - R} y={H - 6} textAnchor="end" fontSize="10" fill="var(--ink-3)" fontFamily="var(--font-sans)">{shortDate(new Date(t1))}</text>
     </svg>
   );
 }

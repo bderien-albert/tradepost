@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { requireStaff } from "@/lib/session";
 import { activeSpecialWhere, openWhere, postInclude } from "@/lib/queries";
 import { ago, money } from "@/lib/format";
-import { addGame, addItem, banUser, resolveReport, setRole, setSpecial, unbanUser } from "@/app/actions";
+import { addGame, addItem, banUser, resolveReport, setSpecial, unbanUser } from "@/app/actions";
+import { isAdmin } from "@/lib/admins";
 import { ActionForm, SubmitButton } from "@/components/forms";
 
 export const dynamic = "force-dynamic";
@@ -26,18 +27,18 @@ export default async function Admin({ searchParams }: { searchParams: Promise<{ 
 
   return (
     <div>
-      <p className="eyebrow">Staff · signed in as {staff.username} ({staff.role.toLowerCase()})</p>
-      <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">Admin</h1>
-      <div className="flex gap-6 border-b border-rule-strong mt-6 mb-6 overflow-x-auto">
+      <p className="eyebrow">Admin · signed in as {staff.username}</p>
+      <h1 className="font-display text-3xl sm:text-4xl font-extrabold tracking-tight mt-1">Admin</h1>
+      <div className="flex gap-2 mt-6 mb-6 overflow-x-auto no-scrollbar">
         {TABS.map((t) => (
-          <Link key={t.key} href={`/admin?tab=${t.key}`} className={`pb-2.5 -mb-px border-b-2 text-sm whitespace-nowrap ${tab === t.key ? "border-ink font-medium" : "border-transparent text-ink-2 hover:text-ink"}`}>
-            {t.label}{t.key === "reports" && openReports > 0 && <span className="ml-1.5 num text-xs bg-sell text-white rounded-sm px-1.5">{openReports}</span>}
+          <Link key={t.key} href={`/admin?tab=${t.key}`} className={`chip h-10 px-5 ${tab === t.key ? "chip-on" : ""}`}>
+            {t.label}{t.key === "reports" && openReports > 0 && <span className="ml-1.5 num text-xs bg-sell text-white rounded-2xl px-1.5">{openReports}</span>}
           </Link>
         ))}
       </div>
       {tab === "specials" && <Specials q={sp.q} />}
       {tab === "reports" && <Reports />}
-      {tab === "users" && <Users q={sp.q} isAdmin={staff.role === "ADMIN"} />}
+      {tab === "users" && <Users q={sp.q} />}
       {tab === "catalog" && <Catalog />}
       {tab === "log" && <Log />}
     </div>
@@ -114,7 +115,7 @@ async function Reports() {
       {reports.map((r) => {
         const link = href(r) ?? (names.get(r.targetId) ? `/u/${names.get(r.targetId)}` : null);
         return (
-          <li key={r.id} className={`border rounded-sm p-4 ${r.status === "OPEN" ? "border-rule-strong bg-card" : "border-rule opacity-70"}`}>
+          <li key={r.id} className={`border rounded-2xl p-4 ${r.status === "OPEN" ? "border-rule-strong bg-card" : "border-rule opacity-70"}`}>
             <div className="flex flex-wrap items-baseline gap-x-3 text-sm">
               <span className="eyebrow">{r.targetType}</span>
               {link && <Link href={link} className="underline underline-offset-4">Open {r.targetType}{r.targetType === "user" ? ` ${names.get(r.targetId)}` : ""}</Link>}
@@ -145,7 +146,7 @@ async function Reports() {
   );
 }
 
-async function Users({ q, isAdmin }: { q?: string; isAdmin: boolean }) {
+async function Users({ q }: { q?: string }) {
   const users = await db.user.findMany({
     where: q ? { username: { contains: q, mode: "insensitive" } } : {},
     orderBy: { createdAt: "desc" }, take: 50,
@@ -162,20 +163,12 @@ async function Users({ q, isAdmin }: { q?: string; isAdmin: boolean }) {
               <td><Link href={`/u/${u.username}`} className="font-medium hover:underline underline-offset-4">{u.username}</Link></td>
               <td className="text-xs text-ink-3">{ago(u.createdAt)}</td>
               <td className="r num">{u._count.posts}</td>
-              <td>
-                {isAdmin ? (
-                  <form action={setRole} className="flex gap-1.5">
-                    <input type="hidden" name="userId" value={u.id} />
-                    <select name="role" defaultValue={u.role} className="field h-[1.85rem] w-28 text-xs"><option value="PLAYER">Player</option><option value="MOD">Moderator</option><option value="ADMIN">Admin</option></select>
-                    <SubmitButton className="btn btn-ghost btn-sm">Set</SubmitButton>
-                  </form>
-                ) : <span className="text-sm">{u.role.toLowerCase()}</span>}
-              </td>
+              <td className="text-sm">{isAdmin(u) ? <span className="deal-tag">Admin</span> : "Player"}</td>
               <td className="text-sm">{u.bannedAt ? <span className="text-sell">Banned</span> : "Active"}</td>
               <td className="r">
                 {u.bannedAt ? (
                   <form action={unbanUser}><input type="hidden" name="userId" value={u.id} /><SubmitButton className="btn btn-ghost btn-sm">Unban</SubmitButton></form>
-                ) : u.role !== "ADMIN" && (
+                ) : !isAdmin(u) && (
                   <form action={banUser} className="flex gap-1.5 justify-end"><input type="hidden" name="userId" value={u.id} /><input name="reason" placeholder="Reason" className="field h-[1.85rem] w-32 text-xs" /><SubmitButton className="btn btn-ghost btn-sm">Ban</SubmitButton></form>
                 )}
               </td>
@@ -191,7 +184,7 @@ async function Catalog() {
   const games = await db.game.findMany({ orderBy: { sortOrder: "asc" }, include: { currencies: true, _count: { select: { items: true } } } });
   return (
     <div className="grid lg:grid-cols-2 gap-8">
-      <section className="border border-rule-strong rounded-sm p-5">
+      <section className="panel p-5">
         <h2 className="font-medium">Add a game tab</h2>
         <ActionForm action={addGame} className="mt-4 space-y-3" resetOnOk>
           <div><label className="label">Game name</label><input name="name" className="field" placeholder="e.g. Bee Swarm Simulator" required /></div>
@@ -205,7 +198,7 @@ async function Catalog() {
           {games.map((g) => <li key={g.id} className="py-2 flex justify-between"><span>{g.name}</span><span className="text-ink-3">{g._count.items} items · {g.currencies.map((c) => c.symbol).join(" ")}</span></li>)}
         </ul>
       </section>
-      <section className="border border-rule-strong rounded-sm p-5">
+      <section className="panel p-5">
         <h2 className="font-medium">Add an item</h2>
         <ActionForm action={addItem} className="mt-4 space-y-3" resetOnOk>
           <div><label className="label">Game</label><select name="gameId" className="field">{games.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}</select></div>

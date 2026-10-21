@@ -34,7 +34,7 @@ export default async function History({ searchParams }: { searchParams: Promise<
   return (
     <div>
       <p className="eyebrow">Public record</p>
-      <h1 className="font-display text-3xl font-semibold tracking-tight mt-1">Every completed trade</h1>
+      <h1 className="font-display text-3xl sm:text-4xl font-extrabold tracking-tight mt-1">Every completed trade</h1>
       <p className="text-ink-2 mt-2 text-sm"><span className="num">{total.toLocaleString("en-US")}</span> trades on record. Nothing is deleted.</p>
 
       <form className="flex flex-wrap gap-2 my-6">

@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { createPost } from "@/app/actions";
 import { ActionForm, SubmitButton } from "@/components/forms";
+import { ItemArt } from "@/components/item-art";
+import { WOOD_SIZES } from "@/lib/sizes";
 
 type Game = {
   slug: string; name: string;
@@ -19,6 +21,7 @@ export function NewPostForm({ games, initial, isStaff }: { games: Game[]; isStaf
   const [qty, setQty] = useState("1");
   const [price, setPrice] = useState("");
   const item = game?.items.find((i) => i.id === itemId);
+  const wood = item?.category.toLowerCase() === "wood";
   const currency = game?.currencies[0];
   const total = Number(qty) * Number(price);
 
@@ -32,9 +35,19 @@ export function NewPostForm({ games, initial, isStaff }: { games: Game[]; isStaf
 
   return (
     <ActionForm action={createPost} className="mt-8 space-y-5">
-      <div className="grid grid-cols-2 border border-rule-strong rounded-sm overflow-hidden" role="radiogroup">
+      {item && (
+        <div className="flex items-center gap-4 rounded-3xl bg-paper-2 p-3">
+          <ItemArt item={item} size="sm" className="w-20 h-20 rounded-2xl shrink-0" />
+          <div>
+            <p className="font-display text-xl font-extrabold tracking-tight">{item.name}</p>
+            <p className="text-sm text-ink-2">{item.category} · {game.name}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-1 rounded-full bg-paper-2 p-1" role="radiogroup">
         {(["SELL", "BUY"] as const).map((s) => (
-          <label key={s} className={`cursor-pointer text-center py-2.5 text-sm font-medium transition-colors ${side === s ? (s === "SELL" ? "bg-sell text-white" : "bg-buy text-white") : "bg-card text-ink-2 hover:text-ink"}`}>
+          <label key={s} className={`cursor-pointer text-center py-2.5 rounded-full text-sm font-bold transition-colors ${side === s ? (s === "SELL" ? "bg-sell text-white shadow" : "bg-buy text-white shadow") : "text-ink-2 hover:text-ink"}`}>
             <input type="radio" name="side" value={s} checked={side === s} onChange={() => setSide(s)} className="sr-only" />
             {s === "SELL" ? "I'm selling" : "I'm buying"}
           </label>
@@ -61,6 +74,20 @@ export function NewPostForm({ games, initial, isStaff }: { games: Game[]; isStaf
         </div>
       </div>
 
+      {wood && (
+        <div>
+          <span className="label">Wood size</span>
+          <div className="flex flex-wrap gap-2" role="radiogroup">
+            {WOOD_SIZES.map((w, i) => (
+              <label key={w.key} className="cursor-pointer">
+                <input type="radio" name="size" value={w.key} defaultChecked={i === 0} className="peer sr-only" />
+                <span className="chip peer-checked:bg-ink peer-checked:text-paper peer-checked:shadow-none">{w.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
       <input type="hidden" name="currencyId" value={currency?.id ?? ""} />
       <div className="grid sm:grid-cols-2 gap-4">
         <div>
@@ -83,7 +110,7 @@ export function NewPostForm({ games, initial, isStaff }: { games: Game[]; isStaf
       </div>
 
       {isStaff && (
-        <label className="flex items-start gap-3 border border-special-rule bg-special rounded-sm p-3 cursor-pointer">
+        <label className="flex items-start gap-3 rounded-2xl bg-special-tint p-4 cursor-pointer">
           <input type="checkbox" name="adminDeal" checked={adminDeal} onChange={(e) => setAdminDeal(e.target.checked)} className="mt-1" />
           <span>
             <span className="block text-sm font-medium">Post as an admin deal</span>
@@ -92,7 +119,7 @@ export function NewPostForm({ games, initial, isStaff }: { games: Game[]; isStaf
         </label>
       )}
 
-      <div className="flex flex-wrap items-end justify-between gap-4 pt-2 border-t border-rule">
+      <div className="flex flex-wrap items-end justify-between gap-4 pt-4 border-t border-rule">
         <div>
           <label className="label" htmlFor="days">Keep it up for</label>
           {adminDeal ? (
@@ -107,11 +134,11 @@ export function NewPostForm({ games, initial, isStaff }: { games: Game[]; isStaf
         </div>
         <div className="text-right">
           <p className="text-xs text-ink-3">Total</p>
-          <p className="num text-xl">{currency?.symbol}{Number.isFinite(total) && total > 0 ? total.toLocaleString("en-US") : "0"}</p>
+          <p className="num font-display text-3xl font-extrabold text-brand">{currency?.symbol}{Number.isFinite(total) && total > 0 ? total.toLocaleString("en-US") : "0"}</p>
         </div>
       </div>
 
-      <SubmitButton className={`btn w-full ${side === "SELL" ? "btn-sell" : "btn-buy"}`} pendingText="Posting…">
+      <SubmitButton className={`btn btn-lg w-full ${side === "SELL" ? "btn-sell" : "btn-buy"}`} pendingText="Posting…">
         {side === "SELL" ? "Post listing" : "Post buy order"}
       </SubmitButton>
     </ActionForm>

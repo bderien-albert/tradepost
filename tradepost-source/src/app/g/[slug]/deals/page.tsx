@@ -3,9 +3,10 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { db } from "@/lib/db";
 import { currentUser } from "@/lib/session";
-import { activeSpecialWhere, postInclude, reputation } from "@/lib/queries";
+import { activeSpecialWhere, postInclude, reputation, savedIdsFor } from "@/lib/queries";
+import { isAdmin } from "@/lib/admins";
 import { maybeCleanup } from "@/lib/cleanup";
-import { PostTable } from "@/components/post-table";
+import { PostGrid } from "@/components/post-card";
 
 export const dynamic = "force-dynamic";
 
@@ -40,37 +41,37 @@ export default async function AdminDeals({ params, searchParams }: Props) {
     perCat.set(cat, (perCat.get(cat) ?? 0) + c._count);
   }
   const total = [...perCat.values()].reduce((a, b) => a + b, 0);
-  const rep = await reputation([...new Set(deals.map((p) => p.userId))]);
-  const isStaff = user && user.role !== "PLAYER";
+  const [rep, savedIds] = await Promise.all([reputation([...new Set(deals.map((p) => p.userId))]), savedIdsFor(user?.id)]);
+  const isStaff = isAdmin(user);
   const tabs = [{ key: undefined, label: "All", n: total }, ...categories.map((c) => ({ key: c.category, label: c.category, n: perCat.get(c.category) ?? 0 }))];
 
   return (
-    <div>
-      <p className="eyebrow"><Link href={`/g/${slug}`} className="hover:text-ink">{game.name}</Link> · Admin deals</p>
-      <div className="flex flex-wrap items-end justify-between gap-4 mt-1 mb-6">
+    <div className="space-y-6">
+      <div className="rounded-[32px] bg-special text-[#3d2c00] px-6 py-8 sm:px-10 flex flex-wrap items-end justify-between gap-6">
         <div>
-          <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight">Admin deals</h1>
-          <p className="text-ink-2 mt-2 max-w-2xl">Deals picked or posted by the {game.name} staff. They stay up until staff take them down, unlike normal posts which close after a week.</p>
+          <p className="text-xs font-bold uppercase tracking-wider opacity-70"><Link href={`/g/${slug}`} className="hover:underline">{game.name}</Link> · Admin deals</p>
+          <h1 className="font-display text-4xl sm:text-5xl font-extrabold tracking-tight mt-1">★ Admin deals</h1>
+          <p className="mt-2 max-w-xl font-medium opacity-85">Deals picked or posted by the {game.name} staff. They stay up until staff take them down, unlike normal posts which close after a week.</p>
         </div>
-        {isStaff && <Link href={`/post/new?game=${slug}&adminDeal=1`} className="btn">Add an admin deal</Link>}
+        {isStaff && <Link href={`/post/new?game=${slug}&adminDeal=1`} className="btn btn-lg bg-[#3d2c00] text-white">+ Add an admin deal</Link>}
       </div>
 
-      <div className="flex gap-6 border-b border-rule-strong mb-5 overflow-x-auto">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar">
         {tabs.map((t) => (
           <Link
             key={t.label}
             href={t.key ? `/g/${slug}/deals?type=${encodeURIComponent(t.key)}` : `/g/${slug}/deals`}
-            className={`pb-2.5 -mb-px border-b-2 text-sm whitespace-nowrap ${type === t.key ? "border-ink font-medium" : "border-transparent text-ink-2 hover:text-ink"}`}
+            className={`chip h-10 px-5 text-[0.95rem] ${type === t.key ? "chip-on" : ""}`}
           >
-            {t.label} <span className="num text-xs text-ink-3">{t.n}</span>
+            {t.label} <span className="num text-xs opacity-60">{t.n}</span>
           </Link>
         ))}
       </div>
 
-      <PostTable
+      <PostGrid
         posts={deals}
         rep={rep}
-        showSide
+        savedIds={savedIds}
         empty={isStaff ? "No admin deals here yet. Pin any open post, or add one with the button above." : "No admin deals in this category right now."}
       />
     </div>

@@ -50,12 +50,25 @@ enum ReportStatus {
   DISMISSED
 }
 
+enum WoodSize {
+  SMALL
+  MEDIUM
+  BIG
+  SMALL_TRUCKLOAD
+  LONG_TRUCKLOAD
+}
+
 model User {
   id             String    @id @default(cuid())
-  robloxUserId   String    @unique
+  robloxUserId   String?   @unique
   username       String    @unique
   displayName    String
   avatarUrl      String?
+  passwordHash   String?
+  bio            String?
+  avatarColor    String?
+  failedLogins   Int       @default(0)
+  lockedUntil    DateTime?
   role           Role      @default(PLAYER)
   createdAt      DateTime  @default(now())
   bannedAt       DateTime?
@@ -63,6 +76,7 @@ model User {
 
   posts          Post[]
   offers         Offer[]
+  saved          SavedPost[]
   postMessages   PostMessage[] @relation("sender")
   postThreads    PostMessage[] @relation("participant")
   buyTrades      Trade[]   @relation("buyer")
@@ -124,6 +138,8 @@ model Post {
   itemId       String
   side         Side
   quantity     Int
+  // Only used for wood: how the logs come (single logs up to a full truckload).
+  size         WoodSize?
   filled       Int        @default(0)
   unitPrice    Int
   currencyId   String
@@ -143,6 +159,7 @@ model Post {
   offers       Offer[]
   trades       Trade[]
   messages     PostMessage[]
+  savedBy      SavedPost[]
 
   @@index([gameId, side, status])
   @@index([itemId, status])
@@ -172,6 +189,7 @@ model Trade {
   sellerId          String
   itemId            String
   quantity          Int
+  size              WoodSize?
   // Terms are copied from the post/offer so history never shifts afterwards.
   unitPrice         Int
   currencyId        String
@@ -257,4 +275,14 @@ model PostMessage {
 
   @@index([postId, participantId, createdAt])
   @@index([createdAt])
+}
+
+model SavedPost {
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  post      Post     @relation(fields: [postId], references: [id])
+
+  @@id([userId, postId])
 }

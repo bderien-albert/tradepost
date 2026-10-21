@@ -7,7 +7,9 @@ import { db } from "@/lib/db";
 import { checkText } from "@/lib/filter";
 import { audit } from "@/lib/audit";
 import { NO_EXPIRY, WEEK_MS } from "@/lib/cleanup";
-import { currentUser, demoLoginEnabled, endSession, requireStaff, requireUser, startSession } from "@/lib/session";
+import { currentUser, endSession, requireStaff, requireUser } from "@/lib/session";
+import { isAdmin } from "@/lib/admins";
+import { WOOD_SIZES, isWood } from "@/lib/sizes";
 
 export type FormState = { error?: string; ok?: string } | undefined;
 
@@ -15,21 +17,6 @@ const MAX_OPEN_POSTS = 25;
 const NEW_ACCOUNT_DAILY_POSTS = 5;
 
 // ---------- auth ----------
-
-export async function demoLogin(_: FormState, form: FormData): Promise<FormState> {
-  if (!demoLoginEnabled()) return { error: "Demo login is turned off." };
-  const username = String(form.get("username") ?? "").trim();
-  if (!/^[A-Za-z0-9_]{3,20}$/.test(username)) return { error: "Use 3 to 20 letters, numbers or underscores." };
-  let user = await db.user.findFirst({ where: { username: { equals: username, mode: "insensitive" } } });
-  if (!user) {
-    const isFirst = (await db.user.count()) === 0;
-    user = await db.user.create({
-      data: { username, displayName: username, robloxUserId: `demo-${username.toLowerCase()}`, role: isFirst ? "ADMIN" : "PLAYER" },
-    });
-  }
-  await startSession(user.id);
-  redirect("/");
-}
 
 export async function logout() {
   await endSession();
@@ -46,6 +33,7 @@ const postSchema = z.object({
   currencyId: z.string().min(1),
   notes: z.string().max(280).optional(),
   days: z.coerce.number().int().min(1).max(7),
+  size: z.enum(WOOD_SIZES.map((w) => w.key) as [string, ...string[]]).optional(),
 });
 
 export async function createPost(_: FormState, form: FormData): Promise<FormState> {
@@ -58,6 +46,7 @@ export async function createPost(_: FormState, form: FormData): Promise<FormStat
     currencyId: form.get("currencyId"),
     notes: (form.get("notes") as string) || undefined,
     days: form.get("days") ?? 7,
+    size: (form.get("size") as string) || undefined,
   });
   if (!parsed.success) return { error: "Check the item, quantity and price." };
   const d = parsed.data;
@@ -69,16 +58,17 @@ export async function createPost(_: FormState, form: FormData): Promise<FormStat
   const item = await db.item.findUnique({ where: { id: d.itemId } });
   const currency = await db.currency.findUnique({ where: { id: d.currencyId } });
   if (!item || !currency || currency.gameId !== item.gameId) return { error: "That item and currency don't belong to the same game." };
+  if (isWood(item.category) && !d.size) return { error: "Pick a size for the wood." };
 
   const open = await db.post.count({ where: { userId: user.id, status: "OPEN" } });
   if (open >= MAX_OPEN_POSTS) return { error: `You can have ${MAX_OPEN_POSTS} open posts at once. Close some first.` };
   const isNew = Date.now() - user.createdAt.getTime() < 7 * 86400_000;
-  if (isNew && user.role === "PLAYER") {
+  if (isNew && !isAdmin(user)) {
     const today = await db.post.count({ where: { userId: user.id, createdAt: { gt: new Date(Date.now() - 86400_000) } } });
     if (today >= NEW_ACCOUNT_DAILY_POSTS) return { error: `New accounts can post ${NEW_ACCOUNT_DAILY_POSTS} times a day for their first week.` };
   }
 
-  const adminDeal = user.role !== "PLAYER" && form.get("adminDeal") === "on";
+  const adminDeal = isAdmin(user) && form.get("adminDeal") === "on";
   const post = await db.post.create({
     data: {
       isSpecial: adminDeal,
@@ -87,6 +77,7 @@ export async function createPost(_: FormState, form: FormData): Promise<FormStat
       itemId: item.id,
       side: d.side,
       quantity: d.quantity,
+      size: isWood(item.category) ? (d.size as (typeof WOOD_SIZES)[number]["key"]) : null,
       unitPrice: d.unitPrice,
       currencyId: currency.id,
       notes: d.notes,
@@ -182,6 +173,7 @@ export async function acceptOffer(offerId: string) {
         buyerId: sellerIsPoster ? offer.userId : post.userId,
         sellerId: sellerIsPoster ? post.userId : offer.userId,
         itemId: post.itemId,
+        size: post.size,
         quantity: offer.quantity,
         unitPrice: offer.unitPrice,
         currencyId: post.currencyId,
@@ -364,7 +356,7 @@ export async function banUser(form: FormData) {
   const userId = String(form.get("userId"));
   const reason = String(form.get("reason") ?? "").trim() || "Broke the trading rules";
   const target = await db.user.findUnique({ where: { id: userId } });
-  if (!target || target.role === "ADMIN" || target.id === staff.id) return;
+  if (!target || isAdmin(target) || target.id === staff.id) return;
   await db.$transaction([
     db.user.update({ where: { id: userId }, data: { bannedAt: new Date(), banReason: reason } }),
     db.post.updateMany({ where: { userId, status: "OPEN" }, data: { status: "REMOVED", isSpecial: false } }),
@@ -381,23 +373,12 @@ export async function unbanUser(form: FormData) {
   revalidatePath("/admin");
 }
 
-export async function setRole(form: FormData) {
-  const staff = await requireStaff();
-  if (staff.role !== "ADMIN") return;
-  const userId = String(form.get("userId"));
-  const role = z.enum(["PLAYER", "MOD", "ADMIN"]).parse(form.get("role"));
-  await db.user.update({ where: { id: userId }, data: { role } });
-  await audit(staff.id, "user.role", `user:${userId}`, { role });
-  revalidatePath("/admin");
-}
-
 function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 }
 
 export async function addGame(_: FormState, form: FormData): Promise<FormState> {
   const staff = await requireStaff();
-  if (staff.role !== "ADMIN") return { error: "Admins only." };
   const name = String(form.get("name") ?? "").trim();
   const currency = String(form.get("currency") ?? "").trim();
   const symbol = String(form.get("symbol") ?? "").trim();
@@ -413,7 +394,6 @@ export async function addGame(_: FormState, form: FormData): Promise<FormState> 
 
 export async function addItem(_: FormState, form: FormData): Promise<FormState> {
   const staff = await requireStaff();
-  if (staff.role !== "ADMIN") return { error: "Admins only." };
   const gameId = String(form.get("gameId"));
   const name = String(form.get("name") ?? "").trim();
   const category = String(form.get("category") ?? "").trim() || "Other";
@@ -426,4 +406,16 @@ export async function addItem(_: FormState, form: FormData): Promise<FormState> 
   await audit(staff.id, "item.add", `item:${slug}`);
   revalidatePath("/", "layout");
   return { ok: `${name} added.` };
+}
+
+// ---------- saved ----------
+
+export async function toggleSave(postId: string) {
+  const user = await currentUser();
+  if (!user) redirect(`/login?next=/post/${postId}`);
+  const key = { userId_postId: { userId: user.id, postId } };
+  const existing = await db.savedPost.findUnique({ where: key });
+  if (existing) await db.savedPost.delete({ where: key });
+  else await db.savedPost.create({ data: { userId: user.id, postId } });
+  revalidatePath("/", "layout");
 }

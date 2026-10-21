@@ -31,7 +31,6 @@ export async function GET(req: NextRequest) {
   const info = (await infoRes.json()) as { sub: string; preferred_username?: string; nickname?: string; name?: string; picture?: string };
   const username = info.preferred_username ?? info.nickname ?? `user${info.sub}`;
 
-  const existingCount = await db.user.count();
   const user = await db.user.upsert({
     where: { robloxUserId: info.sub },
     // Usernames can change on Roblox, so refresh them on every login.
@@ -41,7 +40,7 @@ export async function GET(req: NextRequest) {
       username,
       displayName: info.nickname ?? username,
       avatarUrl: info.picture ?? null,
-      role: existingCount === 0 || process.env.ADMIN_ROBLOX_IDS?.split(",").includes(info.sub) ? "ADMIN" : "PLAYER",
+      role: "PLAYER",
     },
   });
   await startSession(user.id);

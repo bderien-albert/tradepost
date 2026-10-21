@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import { redirect } from "next/navigation";
 import { db } from "./db";
+import { isAdmin } from "./admins";
 
 const COOKIE = "tp_session";
 const MAX_AGE = 60 * 60 * 24 * 30;
@@ -52,12 +53,12 @@ export async function requireUser() {
 
 export async function requireStaff() {
   const user = await requireUser();
-  if (user.role === "PLAYER") redirect("/");
+  if (!isAdmin(user)) redirect("/");
   return user;
 }
 
 export function demoLoginEnabled() {
-  return process.env.DEMO_LOGIN === "true";
+  return false;
 }
 
 export function robloxLoginEnabled() {

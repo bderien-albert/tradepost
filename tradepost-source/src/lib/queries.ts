@@ -1,4 +1,4 @@
-import { Prisma, Side } from "@prisma/client";
+import { Prisma, Side, WoodSize } from "@prisma/client";
 import { db } from "./db";
 
 export const postInclude = {
@@ -24,13 +24,13 @@ export function activeSpecialWhere(): Prisma.PostWhereInput {
 
 export type SortKey = "new" | "price_asc" | "price_desc";
 
-export async function boardPosts(opts: { gameId: string; side: Side; itemId?: string; sort: SortKey }) {
-  const base: Prisma.PostWhereInput = { gameId: opts.gameId, side: opts.side, ...(opts.itemId ? { itemId: opts.itemId } : {}) };
+export async function boardPosts(opts: { gameId: string; side: Side; itemId?: string; size?: WoodSize; sort: SortKey; specials?: number }) {
+  const base: Prisma.PostWhereInput = { gameId: opts.gameId, side: opts.side, ...(opts.itemId ? { itemId: opts.itemId } : {}), ...(opts.size ? { size: opts.size } : {}) };
   const orderBy: Prisma.PostOrderByWithRelationInput =
     opts.sort === "price_asc" ? { unitPrice: "asc" } : opts.sort === "price_desc" ? { unitPrice: "desc" } : { createdAt: "desc" };
 
   const [specials, regular] = await Promise.all([
-    db.post.findMany({ where: { ...base, ...activeSpecialWhere() }, include: postInclude, orderBy: { createdAt: "desc" }, take: 3 }),
+    db.post.findMany({ where: { ...base, ...activeSpecialWhere() }, include: postInclude, orderBy: { createdAt: "desc" }, take: opts.specials ?? 3 }),
     db.post.findMany({ where: { ...base, ...openWhere() }, include: postInclude, orderBy, take: 100 }),
   ]);
   const specialIds = new Set(specials.map((p) => p.id));
@@ -72,4 +72,10 @@ export async function priceStats(itemId: string, days = 30) {
     count: trades.length,
     points: trades.map((t) => ({ t: t.completedAt!.getTime(), p: t.unitPrice })),
   };
+}
+
+export async function savedIdsFor(userId: string | undefined) {
+  if (!userId) return new Set<string>();
+  const rows = await db.savedPost.findMany({ where: { userId }, select: { postId: true } });
+  return new Set(rows.map((r) => r.postId));
 }

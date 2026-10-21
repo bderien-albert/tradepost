@@ -1,16 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import type { WoodSize } from "@prisma/client";
 import { db } from "@/lib/db";
-import { activeSpecialWhere, boardPosts, openWhere, reputation, type SortKey } from "@/lib/queries";
-import { PostTable } from "@/components/post-table";
+import { currentUser } from "@/lib/session";
+import { activeSpecialWhere, boardPosts, openWhere, postInclude, reputation, savedIdsFor, type SortKey } from "@/lib/queries";
+import { DealsCarousel, PostGrid } from "@/components/post-card";
 import { TradeList, tradeInclude } from "@/components/trade-list";
+import { ItemArt } from "@/components/item-art";
 import { compact } from "@/lib/format";
 import { maybeCleanup } from "@/lib/cleanup";
+import { WOOD_SIZES, isWood } from "@/lib/sizes";
 
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ view?: string; item?: string; sort?: string }> };
+type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ view?: string; item?: string; sort?: string; size?: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const game = await db.game.findUnique({ where: { slug: (await params).slug } });
@@ -24,6 +28,8 @@ const VIEWS = [
   { key: "trades", label: "Recent trades" },
 ] as const;
 
+type Href = (o: Record<string, string | undefined>) => string;
+
 export default async function GamePage({ params, searchParams }: Props) {
   await maybeCleanup();
   const { slug } = await params;
@@ -35,43 +41,40 @@ export default async function GamePage({ params, searchParams }: Props) {
   if (!game || !game.active) notFound();
 
   const view = VIEWS.some((v) => v.key === sp.view) ? sp.view! : "sell";
-  const sort = (["new", "price_asc", "price_desc"].includes(sp.sort ?? "") ? sp.sort : view === "buy" ? "price_desc" : "price_asc") as SortKey;
+  const sort = (["new", "price_asc", "price_desc"].includes(sp.sort ?? "") ? sp.sort : view === "buy" ? "price_desc" : "new") as SortKey;
   const item = sp.item ? game.items.find((i) => i.slug === sp.item) : undefined;
-  const href = (o: Record<string, string | undefined>) => {
+  const size = WOOD_SIZES.some((s) => s.key === sp.size) ? (sp.size as WoodSize) : undefined;
+  const href: Href = (o) => {
     const q = new URLSearchParams();
-    const merged = { view, item: item?.slug, sort: sp.sort, ...o };
+    const merged = { view, item: item?.slug, sort: sp.sort, size, ...o };
     for (const [k, v] of Object.entries(merged)) if (v) q.set(k, v);
     return `/g/${slug}?${q.toString()}`;
   };
 
   return (
-    <div>
-      <div className="flex flex-wrap items-end justify-between gap-4 mb-6">
+    <div className="space-y-6">
+      <div className="rounded-[32px] bg-sky text-white px-6 py-8 sm:px-10 flex flex-wrap items-end justify-between gap-6">
         <div>
-          <p className="eyebrow">Market · paid in {game.currencies.map((c) => `${c.name} (${c.symbol})`).join(", ")}</p>
-          <h1 className="font-display text-3xl sm:text-4xl font-semibold tracking-tight mt-1">{game.name}</h1>
-          {game.blurb && <p className="text-ink-2 mt-2 max-w-2xl">{game.blurb}</p>}
+          <p className="text-xs font-bold uppercase tracking-wider text-white/80">Market · paid in {game.currencies.map((c) => `${c.name} (${c.symbol})`).join(", ")}</p>
+          <h1 className="font-display text-4xl sm:text-5xl font-extrabold tracking-tight mt-1">{game.name}</h1>
+          {game.blurb && <p className="text-white/90 mt-2 max-w-xl">{game.blurb}</p>}
         </div>
-        <div className="flex gap-2">
-          <Link href={`/post/new?game=${slug}&side=SELL`} className="btn btn-sell">Sell something</Link>
-          <Link href={`/post/new?game=${slug}&side=BUY`} className="btn btn-buy">Place a buy order</Link>
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/post/new?game=${slug}&side=SELL`} className="btn btn-lg bg-white !text-ink">Sell something</Link>
+          <Link href={`/post/new?game=${slug}&side=BUY`} className="btn btn-lg bg-ink/25 hover:bg-ink/35">Place a buy order</Link>
         </div>
       </div>
 
-      <div className="flex gap-6 border-b border-rule-strong mb-5 overflow-x-auto">
+      <div className="flex gap-2 overflow-x-auto no-scrollbar">
         {VIEWS.map((v) => (
-          <Link
-            key={v.key}
-            href={href({ view: v.key, sort: undefined })}
-            className={`pb-2.5 -mb-px border-b-2 text-sm whitespace-nowrap ${view === v.key ? "border-ink font-medium" : "border-transparent text-ink-2 hover:text-ink"}`}
-          >
+          <Link key={v.key} href={href({ view: v.key, sort: undefined })} className={`chip h-10 px-5 text-[0.95rem] ${view === v.key ? "chip-on" : ""}`}>
             {v.label}
           </Link>
         ))}
       </div>
 
       {(view === "sell" || view === "buy") && (
-        <Board gameId={game.id} side={view === "sell" ? "SELL" : "BUY"} itemId={item?.id} sort={sort} items={game.items} current={item?.slug} href={href} />
+        <Board gameId={game.id} side={view === "sell" ? "SELL" : "BUY"} item={item} size={size} sort={sort} items={game.items} href={href} slug={slug} />
       )}
       {view === "items" && <Items gameId={game.id} slug={slug} items={game.items} symbol={game.currencies[0]?.symbol ?? ""} />}
       {view === "trades" && <Trades gameId={game.id} />}
@@ -81,47 +84,57 @@ export default async function GamePage({ params, searchParams }: Props) {
   );
 }
 
-async function Board({
-  gameId, side, itemId, sort, items, current, href,
-}: {
-  gameId: string; side: "BUY" | "SELL"; itemId?: string; sort: SortKey;
-  items: { slug: string; name: string }[]; current?: string; href: (o: Record<string, string | undefined>) => string;
+async function Board({ gameId, side, item, size, sort, items, href, slug }: {
+  gameId: string; side: "BUY" | "SELL"; item?: { id: string; slug: string; category: string }; size?: WoodSize; sort: SortKey;
+  items: { slug: string; name: string; category: string }[]; href: Href; slug: string;
 }) {
-  const { specials, regular } = await boardPosts({ gameId, side, itemId, sort });
-  const rep = await reputation([...new Set([...specials, ...regular].map((p) => p.userId))]);
-  const sorts: [SortKey, string][] = [["price_asc", "Lowest price"], ["price_desc", "Highest price"], ["new", "Newest"]];
+  const user = await currentUser();
+  const [{ specials, regular }, savedIds, deals] = await Promise.all([
+    boardPosts({ gameId, side, itemId: item?.id, size, sort }),
+    savedIdsFor(user?.id),
+    db.post.findMany({ where: { gameId, ...activeSpecialWhere() }, include: postInclude, orderBy: { createdAt: "desc" }, take: 10 }),
+  ]);
+  const rep = await reputation([...new Set([...specials, ...regular, ...deals].map((p) => p.userId))]);
+  const sorts: [SortKey, string][] = [["new", "Newest"], ["price_asc", "Lowest price"], ["price_desc", "Highest price"]];
+  const showSizes = !item || isWood(item.category);
 
   return (
-    <>
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <ItemPicker items={items} current={current} href={href} />
-        <div className="ml-auto flex gap-1 text-sm">
+    <div className="space-y-5">
+      {!item && !size && <DealsCarousel posts={deals} rep={rep} savedIds={savedIds} title="Admin deals" href={`/g/${slug}/deals`} />}
+
+      <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+        <Link href={href({ item: undefined, size: undefined })} className={`chip ${!item ? "chip-on" : ""}`}>All items</Link>
+        {items.map((i) => (
+          <Link key={i.slug} href={href({ item: i.slug, size: isWood(i.category) ? size : undefined })} className={`chip pl-1.5 ${item?.slug === i.slug ? "chip-on" : ""}`}>
+            <ItemArt item={i} size="sm" className="w-6 h-6 rounded-full" />
+            {i.name}
+          </Link>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {showSizes && (
+          <div className="flex flex-wrap gap-1.5 items-center">
+            <span className="text-xs font-bold text-ink-3 uppercase tracking-wider mr-1">Wood size</span>
+            <Link href={href({ size: undefined })} className={`chip h-8 ${!size ? "chip-on" : ""}`}>Any</Link>
+            {WOOD_SIZES.map((s) => (
+              <Link key={s.key} href={href({ size: s.key })} className={`chip h-8 ${size === s.key ? "chip-on" : ""}`}>{s.label}</Link>
+            ))}
+          </div>
+        )}
+        <div className="ml-auto flex gap-1.5">
           {sorts.map(([k, label]) => (
-            <Link key={k} href={href({ sort: k })} className={`px-2.5 py-1 rounded-sm ${sort === k ? "bg-ink text-paper" : "text-ink-2 hover:text-ink"}`}>
-              {label}
-            </Link>
+            <Link key={k} href={href({ sort: k })} className={`chip h-8 ${sort === k ? "chip-on" : ""}`}>{label}</Link>
           ))}
         </div>
       </div>
-      <PostTable
-        specials={specials}
-        posts={regular}
+
+      <PostGrid
+        posts={[...(item || size ? specials : []), ...regular]}
         rep={rep}
+        savedIds={savedIds}
         empty={side === "SELL" ? "No one is selling this right now. Place a buy order and sellers will come to you." : "No buy orders right now. Post one to tell sellers what you want."}
       />
-    </>
-  );
-}
-
-function ItemPicker({ items, current, href }: { items: { slug: string; name: string }[]; current?: string; href: (o: Record<string, string | undefined>) => string }) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      <Link href={href({ item: undefined })} className={`text-sm px-2.5 py-1 border rounded-sm ${!current ? "border-ink bg-card" : "border-rule text-ink-2 hover:border-rule-strong"}`}>All items</Link>
-      {items.map((i) => (
-        <Link key={i.slug} href={href({ item: i.slug })} className={`text-sm px-2.5 py-1 border rounded-sm ${current === i.slug ? "border-ink bg-card" : "border-rule text-ink-2 hover:border-rule-strong"}`}>
-          {i.name}
-        </Link>
-      ))}
     </div>
   );
 }
@@ -136,65 +149,52 @@ async function Items({ gameId, slug, items, symbol }: { gameId: string; slug: st
   const st = new Map(stats.map((s) => [s.itemId, s]));
   const ask = new Map(sellOpen.map((s) => [s.itemId, s._min.unitPrice]));
   const bid = new Map(buyOpen.map((s) => [s.itemId, s._max.unitPrice]));
+  const cats = [...new Set(items.map((i) => i.category))];
 
   return (
-    <div className="overflow-x-auto -mx-4 sm:mx-0">
-      <table className="ledger min-w-[680px]">
-        <thead>
-          <tr>
-            <th>Item</th>
-            <th>Category</th>
-            <th className="r">Lowest ask</th>
-            <th className="r">Highest bid</th>
-            <th className="r">30-day avg</th>
-            <th className="r">30-day volume</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((i) => {
-            const s = st.get(i.id);
-            const a = ask.get(i.id);
-            const b = bid.get(i.id);
-            return (
-              <tr key={i.id}>
-                <td><Link href={`/g/${slug}/i/${i.slug}`} className="font-medium hover:underline underline-offset-4">{i.name}</Link></td>
-                <td className="text-ink-2 text-sm">{i.category}{i.rarity ? ` · ${i.rarity}` : ""}</td>
-                <td className="r num text-sell">{a != null ? compact(a, symbol) : <span className="text-ink-3">–</span>}</td>
-                <td className="r num text-buy">{b != null ? compact(b, symbol) : <span className="text-ink-3">–</span>}</td>
-                <td className="r num">{s?._avg.unitPrice != null ? compact(Math.round(s._avg.unitPrice), symbol) : <span className="text-ink-3">–</span>}</td>
-                <td className="r num text-ink-2">{s?._sum.quantity?.toLocaleString("en-US") ?? "0"}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="space-y-8">
+      {cats.map((cat) => (
+        <section key={cat}>
+          <h2 className="font-display text-xl font-extrabold tracking-tight mb-3">{cat}</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            {items.filter((i) => i.category === cat).map((i) => {
+              const s = st.get(i.id);
+              return (
+                <Link key={i.id} href={`/g/${slug}/i/${i.slug}`} className="panel overflow-hidden group transition-transform hover:-translate-y-0.5 hover:shadow-lift">
+                  <ItemArt item={i} className="aspect-[4/3]" />
+                  <div className="p-3.5">
+                    <p className="font-bold group-hover:underline underline-offset-4">{i.name}</p>
+                    {i.rarity && <p className="text-xs text-ink-3">{i.rarity}</p>}
+                    <dl className="mt-2 grid grid-cols-3 gap-1 text-xs">
+                      <div><dt className="text-ink-3">Ask</dt><dd className="font-bold text-sell num">{ask.get(i.id) != null ? compact(ask.get(i.id)!, symbol) : "–"}</dd></div>
+                      <div><dt className="text-ink-3">Bid</dt><dd className="font-bold text-buy num">{bid.get(i.id) != null ? compact(bid.get(i.id)!, symbol) : "–"}</dd></div>
+                      <div><dt className="text-ink-3">Avg</dt><dd className="font-bold num">{s?._avg.unitPrice != null ? compact(Math.round(s._avg.unitPrice), symbol) : "–"}</dd></div>
+                    </dl>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
 
 async function Trades({ gameId }: { gameId: string }) {
-  const trades = await db.trade.findMany({
-    where: { status: "COMPLETED", item: { gameId } },
-    include: tradeInclude,
-    orderBy: { completedAt: "desc" },
-    take: 50,
-  });
-  return <TradeList trades={trades} />;
+  const trades = await db.trade.findMany({ where: { status: "COMPLETED", item: { gameId } }, include: tradeInclude, orderBy: { completedAt: "desc" }, take: 50 });
+  return <div className="panel p-2 sm:p-3"><TradeList trades={trades} /></div>;
 }
 
 async function AdminDealsLink({ gameId, slug }: { gameId: string; slug: string }) {
   const n = await db.post.count({ where: { gameId, ...activeSpecialWhere() } });
   return (
-    <Link
-      href={`/g/${slug}/deals`}
-      className="mt-10 flex items-center justify-between gap-4 border border-special-rule bg-special rounded-sm px-5 py-4 hover:border-special-ink transition-colors"
-    >
+    <Link href={`/g/${slug}/deals`} className="mt-4 flex items-center justify-between gap-4 rounded-3xl bg-special px-6 py-5 text-[#3d2c00] transition-transform hover:-translate-y-0.5">
       <span>
-        <span className="eyebrow !text-special-ink">Admin</span>
-        <span className="block font-medium mt-0.5">Admin deals</span>
-        <span className="block text-sm text-ink-2">Every staff deal for this game, sorted by item type.</span>
+        <span className="block font-display text-xl font-extrabold tracking-tight">★ Admin deals</span>
+        <span className="block text-sm font-semibold opacity-80">Every staff deal for this game, sorted by item type.</span>
       </span>
-      <span className="text-sm text-special-ink whitespace-nowrap"><span className="num">{n}</span> live →</span>
+      <span className="btn bg-[#3d2c00] text-white"><span className="num">{n}</span>&nbsp;live →</span>
     </Link>
   );
 }
