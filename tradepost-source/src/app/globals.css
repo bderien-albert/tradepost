@@ -1,0 +1,127 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f5f2ea;
+  --card: #fbf9f4;
+  --ink: #1d1b17;
+  --ink-2: #57524a;
+  --ink-3: #8a8378;
+  --rule: #dcd5c6;
+  --rule-strong: #b9b09d;
+  --buy: #2d6a45;
+  --buy-tint: #e3eee5;
+  --sell: #a1461d;
+  --sell-tint: #f5e4da;
+  --special: #fbf0cf;
+  --special-rule: #e6cf87;
+  --special-ink: #7a5a08;
+  --focus: #2b5aa8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #16150f;
+    --card: #1d1c16;
+    --ink: #ece7dc;
+    --ink-2: #b4ac9d;
+    --ink-3: #847d70;
+    --rule: #34312a;
+    --rule-strong: #4c483e;
+    --buy: #7cc394;
+    --buy-tint: #1f2e23;
+    --sell: #e99a70;
+    --sell-tint: #33221a;
+    --special: #2c2612;
+    --special-rule: #5b4b1b;
+    --special-ink: #e5c46b;
+    --focus: #8fb2f0;
+  }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-buy: var(--buy);
+  --color-buy-tint: var(--buy-tint);
+  --color-sell: var(--sell);
+  --color-sell-tint: var(--sell-tint);
+  --color-special: var(--special);
+  --color-special-rule: var(--special-rule);
+  --color-special-ink: var(--special-ink);
+  --font-sans: var(--font-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+  --font-display: var(--font-fraunces), Georgia, serif;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-feature-settings: "ss02";
+}
+
+::selection { background: var(--special-rule); color: var(--ink); }
+
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+@layer components {
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem;
+  height: 2.25rem; padding: 0 0.9rem;
+  border: 1px solid var(--ink); background: var(--ink); color: var(--paper);
+  font-size: 0.875rem; font-weight: 500; border-radius: 3px;
+  transition: transform 80ms ease, background 120ms ease;
+}
+.btn:hover { background: color-mix(in oklab, var(--ink) 85%, var(--paper)); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.5; pointer-events: none; }
+.btn-ghost { background: transparent; color: var(--ink); border-color: var(--rule-strong); }
+.btn-ghost:hover { background: var(--card); }
+.btn-buy { background: var(--buy); border-color: var(--buy); color: #fff; }
+.btn-sell { background: var(--sell); border-color: var(--sell); color: #fff; }
+.btn-buy:hover { background: var(--buy); filter: brightness(1.1); }
+.btn-sell:hover { background: var(--sell); filter: brightness(1.1); }
+.btn-sm { height: 1.85rem; padding: 0 0.65rem; font-size: 0.8rem; }
+
+.field {
+  width: 100%; height: 2.4rem; padding: 0 0.7rem;
+  background: var(--card); border: 1px solid var(--rule-strong); border-radius: 3px;
+  color: var(--ink); font-size: 0.925rem;
+}
+textarea.field { height: auto; padding: 0.55rem 0.7rem; line-height: 1.45; }
+.field:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 3px color-mix(in oklab, var(--focus) 20%, transparent); }
+.label { display: block; font-size: 0.8rem; font-weight: 500; color: var(--ink-2); margin-bottom: 0.3rem; }
+
+.ledger { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.ledger th {
+  text-align: left; font-weight: 500; font-family: var(--font-mono); font-size: 0.68rem;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3);
+  padding: 0.55rem 0.75rem; border-bottom: 1px solid var(--rule-strong); white-space: nowrap;
+}
+.ledger td { padding: 0.7rem 0.75rem; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+.ledger tbody tr { transition: background 100ms ease; }
+.ledger tbody tr:hover { background: var(--card); }
+.ledger .r { text-align: right; }
+
+.side-tag {
+  display: inline-block; font-family: var(--font-mono); font-size: 0.66rem; font-weight: 600;
+  letter-spacing: 0.08em; padding: 0.12rem 0.4rem; border-radius: 2px; text-transform: uppercase;
+}
+.side-BUY { background: var(--buy-tint); color: var(--buy); }
+.side-SELL { background: var(--sell-tint); color: var(--sell); }
+}
